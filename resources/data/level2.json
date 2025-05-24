@@ -1,0 +1,49 @@
+{
+    "title": "Средние века (средний уровень)",
+    "rows": 12,
+    "cols": 12,
+    "questions": [
+        {
+            "question": "Феодальная система в средневековой Европе",
+            "answer": "вассалитет",
+            "row": 0,
+            "col": 1,
+            "horizontal": true
+        },
+        {
+            "question": "Эпидемия XIV века",
+            "answer": "чума",
+            "row": 2,
+            "col": 5,
+            "horizontal": false
+        },
+        {
+            "question": "Религиозные войны за освобождение Святой земли",
+            "answer": "крестовыепоходы",
+            "row": 4,
+            "col": 0,
+            "horizontal": true
+        },
+        {
+            "question": "Документ, подписанный английским королем в 1215 году",
+            "answer": "магнакарта",
+            "row": 7,
+            "col": 1,
+            "horizontal": true
+        },
+        {
+            "question": "Византийский император-законодатель",
+            "answer": "юстиниан",
+            "row": 3,
+            "col": 8,
+            "horizontal": false
+        },
+        {
+            "question": "Средневековое сословие духовенства",
+            "answer": "клир",
+            "row": 9,
+            "col": 6,
+            "horizontal": false
+        }
+    ]
+}
