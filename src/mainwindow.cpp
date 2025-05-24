@@ -67,12 +67,34 @@ void MainWindow::showLevelSelect() {
 
 void MainWindow::showCrossword(int level) {
     QString filePath = QString(":/data/level%1.json").arg(level);
-    Crossword crossword;
-    if (crossword.loadFromJson(filePath)) {
-        crosswordWidget->setCrossword(crossword);
+    
+    // Создаем зависимости
+    ICrosswordLoader* loader = new JsonCrosswordLoader();
+    IAnswerChecker* checker = new BasicAnswerChecker();
+    IInputFieldFactory* fieldFactory = new DefaultInputFieldFactory();
+    
+    // Загружаем кроссворд
+    ICrossword* crossword = loader->load(filePath);
+    
+    if (crossword) {
+        // Очищаем предыдущий виджет
+        if (stackedWidget->widget(2)) {
+            stackedWidget->removeWidget(stackedWidget->widget(2));
+        }
+        
+        // Создаем новый виджет с инъекцией зависимостей
+        CrosswordWidget* newCrosswordWidget = new CrosswordWidget(
+            crossword, checker, fieldFactory);
+        connect(newCrosswordWidget, &CrosswordWidget::backToLevelSelect, 
+                this, &MainWindow::showLevelSelect);
+        
+        stackedWidget->addWidget(newCrosswordWidget);
         stackedWidget->setCurrentIndex(2);
     } else {
         QMessageBox::warning(this, "Ошибка", "Не удалось загрузить кроссворд");
+        delete loader;
+        delete checker;
+        delete fieldFactory;
     }
 }
 
