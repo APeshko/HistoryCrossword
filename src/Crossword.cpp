@@ -1,294 +1,205 @@
-#include "../include/Crossword.h"
-#include "../include/utils.h"
+#include "Crossword.h"
 #include <algorithm>
 
-Crossword::Crossword(const std::vector<CrosswordDefinition>& definitions, int gridSize) 
-    : definitions(definitions), gridSize(gridSize), cellSize(40), 
-      selectedX(-1), selectedY(-1), isFullyCompleted(false) {
+Crossword::Crossword(int rows, int cols) 
+    : rows(rows), cols(cols), cellSize(40.f), startPos(150.f, 150.f), selectedCell(-1, -1), currentNumber(1) {
+    grid.resize(rows, std::vector<Cell>(cols));
     
-    initializeGrid();
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            grid[i][j].letter = ' ';
+            grid[i][j].isActive = false;
+            grid[i][j].isEditable = false;
+            grid[i][j].number = 0;
+            grid[i][j].position = sf::Vector2i(j, i);
+            
+            grid[i][j].shape.setSize(sf::Vector2f(cellSize, cellSize));
+            grid[i][j].shape.setPosition(startPos.x + j * cellSize, startPos.y + i * cellSize);
+            grid[i][j].shape.setFillColor(sf::Color::White);
+            grid[i][j].shape.setOutlineThickness(1.f);
+            grid[i][j].shape.setOutlineColor(sf::Color::Black);
+            
+            grid[i][j].letterText.setString("");
+            grid[i][j].letterText.setCharacterSize(24);
+            grid[i][j].letterText.setFillColor(sf::Color::Black);
+            
+            grid[i][j].numberText.setString("");
+            grid[i][j].numberText.setCharacterSize(10);
+            grid[i][j].numberText.setFillColor(sf::Color::Black);
+        }
+    }
 }
 
-void Crossword::initializeGrid() {
-    grid.resize(gridSize, std::vector<Cell>(gridSize));
+void Crossword::setFont(const sf::Font& font) {
+    this->font = &font;
+    for (auto& row : grid) {
+        for (auto& cell : row) {
+            cell.letterText.setFont(font);
+            cell.numberText.setFont(font);
+        }
+    }
+}
+
+void Crossword::loadFromWords(const std::vector<Word>& words) {
+    this->words.clear();
+    currentNumber = 1;
     
-    for (int i = 0; i < definitions.size(); ++i) {
-        const auto& def = definitions[i];
-        int x = def.startX;
-        int y = def.startY;
+    for (const auto& word : words) {
+        Word newWord = word;
+        newWord.isSolved = false;
+        this->words.push_back(newWord);
+        placeWord(newWord);
+    }
+    
+    updateCellTexts();
+}
+
+void Crossword::placeWord(const Word& word) {
+    bool isFirstLetter = true;
+    int x = word.positions[0].x;
+    int y = word.positions[0].y;
+    
+    for (size_t i = 0; i < word.word.size(); ++i) {
+        if (word.isHorizontal) {
+            x = word.positions[i].x;
+        } else {
+            y = word.positions[i].y;
+        }
         
-        for (char c : def.word) {
-            if (x >= gridSize || y >= gridSize) break;
-            
-            grid[y][x].letter = c;
+        if (y >= 0 && y < rows && x >= 0 && x < cols) {
+            grid[y][x].letter = toupper(word.word[i]);
+            grid[y][x].isActive = true;
             grid[y][x].isEditable = true;
-            grid[y][x].wordIndices.push_back(i);
             
-            if (def.horizontal) x++;
-            else y++;
+            if (isFirstLetter) {
+                grid[y][x].number = currentNumber;
+                numberedWords[currentNumber] = &this->words.back();
+                currentNumber++;
+                isFirstLetter = false;
+            }
         }
     }
-    
-    completedWords.clear();
-    for (int i = 0; i < definitions.size(); ++i) {
-        completedWords[i] = false;
-    }
 }
 
-void Crossword::draw(sf::RenderWindow& window, const sf::Font& font) {
-    drawGrid(window);
-    drawLetters(window, font);
-    drawDefinitions(window, font);
-}
-
-void Crossword::drawGrid(sf::RenderWindow& window) const {
-    // Draw grid lines
-    sf::RectangleShape line(sf::Vector2f(gridSize * cellSize, 1));
-    line.setFillColor(sf::Color::Black);
-    
-    for (int i = 0; i <= gridSize; ++i) {
-        // Horizontal lines
-        line.setSize(sf::Vector2f(gridSize * cellSize, 1));
-        line.setPosition(0, i * cellSize);
-        window.draw(line);
-        
-        // Vertical lines
-        line.setSize(sf::Vector2f(1, gridSize * cellSize));
-        line.setPosition(i * cellSize, 0);
-        window.draw(line);
-    }
-    
-    // Draw cells
-    sf::RectangleShape cell(sf::Vector2f(cellSize - 2, cellSize - 2));
-    
-    for (int y = 0; y < gridSize; ++y) {
-        for (int x = 0; x < gridSize; ++x) {
-            if (grid[y][x].isEditable) {
-                cell.setPosition(x * cellSize + 1, y * cellSize + 1);
+void Crossword::updateCellTexts() {
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            if (grid[i][j].isActive) {
+                grid[i][j].letterText.setString(std::string(1, grid[i][j].letter));
+                grid[i][j].letterText.setPosition(
+                    startPos.x + j * cellSize + cellSize / 2 - grid[i][j].letterText.getGlobalBounds().width / 2,
+                    startPos.y + i * cellSize + cellSize / 2 - grid[i][j].letterText.getGlobalBounds().height / 2 - 5
+                );
                 
-                if (x == selectedX && y == selectedY) {
-                    cell.setFillColor(sf::Color(200, 230, 255));
-                } else if (grid[y][x].isHighlighted) {
-                    cell.setFillColor(sf::Color(230, 230, 230));
-                } else {
-                    cell.setFillColor(sf::Color::White);
+                if (grid[i][j].number > 0) {
+                    grid[i][j].numberText.setString(std::to_string(grid[i][j].number));
+                    grid[i][j].numberText.setPosition(
+                        startPos.x + j * cellSize + 2,
+                        startPos.y + i * cellSize + 2
+                    );
                 }
-                
-                window.draw(cell);
             }
         }
     }
 }
 
-void Crossword::drawLetters(sf::RenderWindow& window, const sf::Font& font) const {
-    sf::Text letterText;
-    letterText.setFont(font);
-    letterText.setCharacterSize(24);
-    letterText.setFillColor(sf::Color::Black);
-    
-    for (int y = 0; y < gridSize; ++y) {
-        for (int x = 0; x < gridSize; ++x) {
-            if (grid[y][x].isEditable && !grid[y][x].userInput.empty()) {
-                letterText.setString(grid[y][x].userInput);
-                letterText.setPosition(x * cellSize + cellSize / 2 - 8, y * cellSize + cellSize / 2 - 15);
-                window.draw(letterText);
-            }
-        }
-    }
+bool Crossword::isCellActive(int row, int col) const {
+    return row >= 0 && row < rows && col >= 0 && col < cols && grid[row][col].isActive;
 }
 
-void Crossword::drawDefinitions(sf::RenderWindow& window, const sf::Font& font) const {
-    sf::Text defText;
-    defText.setFont(font);
-    defText.setCharacterSize(20);
-    defText.setFillColor(sf::Color::Black);
-    
-    int startY = gridSize * cellSize + 20;
-    int startX = 20;
-    
-    defText.setString("По горизонтали:");
-    defText.setPosition(startX, startY);
-    window.draw(defText);
-    
-    startY += 30;
-    
-    for (int i = 0; i < definitions.size(); ++i) {
-        const auto& def = definitions[i];
-        if (!def.horizontal) continue;
-        
-        std::string defStr = std::to_string(i + 1) + ". " + def.definition;
-        if (completedWords.at(i)) {
-            defStr += " (решено)";
-            defText.setFillColor(sf::Color::Green);
-        } else {
-            defText.setFillColor(sf::Color::Black);
-        }
-        
-        defText.setString(defStr);
-        defText.setPosition(startX, startY);
-        window.draw(defText);
-        
-        startY += 25;
+void Crossword::selectCell(int row, int col) {
+    if (selectedCell.x != -1 && selectedCell.y != -1) {
+        grid[selectedCell.y][selectedCell.x].shape.setFillColor(sf::Color::White);
     }
     
-    startY += 10;
-    defText.setString("По вертикали:");
-    defText.setPosition(startX, startY);
-    defText.setFillColor(sf::Color::Black);
-    window.draw(defText);
+    selectedCell = sf::Vector2i(col, row);
     
-    startY += 30;
-    
-    for (int i = 0; i < definitions.size(); ++i) {
-        const auto& def = definitions[i];
-        if (def.horizontal) continue;
-        
-        std::string defStr = std::to_string(i + 1) + ". " + def.definition;
-        if (completedWords.at(i)) {
-            defStr += " (решено)";
-            defText.setFillColor(sf::Color::Green);
-        } else {
-            defText.setFillColor(sf::Color::Black);
-        }
-        
-        defText.setString(defStr);
-        defText.setPosition(startX, startY);
-        window.draw(defText);
-        
-        startY += 25;
+    if (selectedCell.x != -1 && selectedCell.y != -1) {
+        grid[selectedCell.y][selectedCell.x].shape.setFillColor(sf::Color(200, 230, 255));
     }
 }
 
 void Crossword::handleEvent(const sf::Event& event, sf::RenderWindow& window) {
-    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        sf::Vector2i mousePos = sf::Mouse::getPosition(window);
-        int x = mousePos.x / cellSize;
-        int y = mousePos.y / cellSize;
-        
-        if (x >= 0 && x < gridSize && y >= 0 && y < gridSize && grid[y][x].isEditable) {
-            selectedX = x;
-            selectedY = y;
-            updateHighlight(x, y);
-        }
-    }
-    else if (event.type == sf::Event::TextEntered && selectedX != -1 && selectedY != -1) {
-        wchar_t c = event.text.unicode;
-        
-        if (utils::isCyrillic(c) || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
-            grid[selectedY][selectedX].userInput = utils::toUpper(static_cast<char>(c));
+    if (event.type == sf::Event::MouseButtonPressed) {
+        if (event.mouseButton.button == sf::Mouse::Left) {
+            sf::Vector2f mousePos = window.mapPixelToCoords(sf::Vector2i(event.mouseButton.x, event.mouseButton.y));
             
-            // Move to next cell if possible
-            for (int wordIdx : grid[selectedY][selectedX].wordIndices) {
-                const auto& def = definitions[wordIdx];
-                int nextX = selectedX;
-                int nextY = selectedY;
-                
-                if (def.horizontal) nextX++;
-                else nextY++;
-                
-                if (nextX < gridSize && nextY < gridSize && grid[nextY][nextX].isEditable) {
-                    selectedX = nextX;
-                    selectedY = nextY;
-                    updateHighlight(selectedX, selectedY);
-                    break;
+            for (int i = 0; i < rows; ++i) {
+                for (int j = 0; j < cols; ++j) {
+                    if (grid[i][j].shape.getGlobalBounds().contains(mousePos) && grid[i][j].isEditable) {
+                        selectCell(i, j);
+                        return;
+                    }
                 }
             }
-            
-            checkCompletion();
         }
-        else if (c == 8) { // Backspace
-            grid[selectedY][selectedX].userInput.clear();
-            
-            // Move to previous cell if possible
-            for (int wordIdx : grid[selectedY][selectedX].wordIndices) {
-                const auto& def = definitions[wordIdx];
-                int prevX = selectedX;
-                int prevY = selectedY;
-                
-                if (def.horizontal) prevX--;
-                else prevY--;
-                
-                if (prevX >= 0 && prevY >= 0 && grid[prevY][prevX].isEditable) {
-                    selectedX = prevX;
-                    selectedY = prevY;
-                    updateHighlight(selectedX, selectedY);
-                    break;
+    }
+    else if (event.type == sf::Event::TextEntered && selectedCell.x != -1 && selectedCell.y != -1) {
+        if (event.text.unicode >= 'а' && event.text.unicode <= 'я') {
+            grid[selectedCell.y][selectedCell.x].letter = toupper(static_cast<char>(event.text.unicode));
+            updateCellTexts();
+        }
+        else if (event.text.unicode >= 'А' && event.text.unicode <= 'Я') {
+            grid[selectedCell.y][selectedCell.x].letter = static_cast<char>(event.text.unicode);
+            updateCellTexts();
+        }
+        else if (event.text.unicode == 8) { // Backspace
+            grid[selectedCell.y][selectedCell.x].letter = ' ';
+            updateCellTexts();
+        }
+    }
+}
+
+void Crossword::render(sf::RenderWindow& window) {
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            if (grid[i][j].isActive) {
+                window.draw(grid[i][j].shape);
+                if (grid[i][j].letter != ' ') {
+                    window.draw(grid[i][j].letterText);
+                }
+                if (grid[i][j].number > 0) {
+                    window.draw(grid[i][j].numberText);
                 }
             }
         }
     }
 }
 
-void Crossword::updateHighlight(int x, int y) {
-    // Clear all highlights
-    for (auto& row : grid) {
-        for (auto& cell : row) {
-            cell.isHighlighted = false;
-        }
-    }
+bool Crossword::checkSolution() {
+    bool allCorrect = true;
     
-    // Highlight all cells in the same words
-    for (int wordIdx : grid[y][x].wordIndices) {
-        const auto& def = definitions[wordIdx];
-        int cx = def.startX;
-        int cy = def.startY;
+    for (auto& word : words) {
+        bool wordCorrect = true;
         
-        for (char c : def.word) {
-            if (cx >= gridSize || cy >= gridSize) break;
+        for (size_t i = 0; i < word.word.size(); ++i) {
+            int x = word.isHorizontal ? word.positions[i].x : word.positions[0].x;
+            int y = word.isHorizontal ? word.positions[0].y : word.positions[i].y;
             
-            grid[cy][cx].isHighlighted = true;
-            
-            if (def.horizontal) cx++;
-            else cy++;
-        }
-    }
-}
-
-void Crossword::checkCompletion() {
-    isFullyCompleted = true;
-    
-    for (int i = 0; i < definitions.size(); ++i) {
-        const auto& def = definitions[i];
-        int x = def.startX;
-        int y = def.startY;
-        bool complete = true;
-        
-        for (char c : def.word) {
-            if (x >= gridSize || y >= gridSize) {
-                complete = false;
-                break;
+            if (y >= 0 && y < rows && x >= 0 && x < cols) {
+                if (toupper(word.word[i]) != grid[y][x].letter) {
+                    wordCorrect = false;
+                    break;
+                }
             }
-            
-            if (grid[y][x].userInput.empty() || grid[y][x].userInput[0] != c) {
-                complete = false;
-                break;
-            }
-            
-            if (def.horizontal) x++;
-            else y++;
         }
         
-        completedWords[i] = complete;
-        if (!complete) isFullyCompleted = false;
-    }
-}
-
-bool Crossword::isComplete() const {
-    return isFullyCompleted;
-}
-
-void Crossword::reset() {
-    for (auto& row : grid) {
-        for (auto& cell : row) {
-            cell.userInput.clear();
+        word.isSolved = wordCorrect;
+        if (!wordCorrect) {
+            allCorrect = false;
         }
     }
     
-    for (auto& pair : completedWords) {
-        pair.second = false;
+    return allCorrect;
+}
+
+void Crossword::clear() {
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            if (grid[i][j].isEditable) {
+                grid[i][j].letter = ' ';
+            }
+        }
     }
-    
-    isFullyCompleted = false;
-    selectedX = -1;
-    selectedY = -1;
+    updateCellTexts();
 }
