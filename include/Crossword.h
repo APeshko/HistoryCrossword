@@ -1,53 +1,52 @@
-#ifndef CROSSWORD_H
-#define CROSSWORD_H
-
+#pragma once
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <string>
-#include <map>
-#include <memory>
+#include <unordered_map>
 
-struct CrosswordDefinition {
+struct Cell {
+    char letter;
+    bool isActive;
+    bool isEditable;
+    int number;
+    sf::Vector2i position;
+    sf::RectangleShape shape;
+    sf::Text letterText;
+    sf::Text numberText;
+};
+
+struct Word {
     std::string word;
-    std::string definition;
-    int startX;
-    int startY;
-    bool horizontal;
+    std::string clue;
+    std::vector<sf::Vector2i> positions;
+    bool isHorizontal;
+    bool isSolved;
 };
 
 class Crossword {
 public:
-    Crossword(const std::vector<CrosswordDefinition>& definitions, int gridSize);
-    
-    void draw(sf::RenderWindow& window, const sf::Font& font);
+    Crossword(int rows, int cols);
+    void loadFromWords(const std::vector<Word>& words);
     void handleEvent(const sf::Event& event, sf::RenderWindow& window);
-    bool isComplete() const;
-    void reset();
+    void render(sf::RenderWindow& window);
+    bool checkSolution();
+    void clear();
+    void setFont(const sf::Font& font);
 
 private:
-    struct Cell {
-        char letter;
-        bool isEditable;
-        bool isHighlighted;
-        std::string userInput;
-        std::vector<int> wordIndices;
-    };
+    void placeWord(const Word& word);
+    void updateCellTexts();
+    bool isCellActive(int row, int col) const;
+    void selectCell(int row, int col);
 
-    void initializeGrid();
-    void updateHighlight(int x, int y);
-    void checkCompletion();
-    void drawGrid(sf::RenderWindow& window) const;
-    void drawDefinitions(sf::RenderWindow& window, const sf::Font& font) const;
-    void drawLetters(sf::RenderWindow& window, const sf::Font& font) const;
-
+    int rows;
+    int cols;
+    float cellSize;
+    sf::Vector2f startPos;
     std::vector<std::vector<Cell>> grid;
-    std::vector<CrosswordDefinition> definitions;
-    std::map<int, bool> completedWords;
-    int gridSize;
-    int cellSize;
-    int selectedX;
-    int selectedY;
-    bool isFullyCompleted;
+    std::vector<Word> words;
+    sf::Vector2i selectedCell;
+    const sf::Font* font;
+    std::unordered_map<int, Word*> numberedWords;
+    int currentNumber;
 };
-
-#endif // CROSSWORD_H
