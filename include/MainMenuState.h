@@ -1,23 +1,23 @@
-#ifndef MAINMENUSTATE_H
-#define MAINMENUSTATE_H
-
+#pragma once
+#include "State.h"
 #include <SFML/Graphics.hpp>
-#include <vector>
-#include "StateManager.h"
 
 class MainMenuState : public State {
 public:
-    MainMenuState(StateManager& manager);
-    
+    MainMenuState(StateMachine& machine, sf::RenderWindow& window);
     void handleEvent(const sf::Event& event) override;
     void update(float dt) override;
-    void draw(sf::RenderWindow& window) override;
-    
-private:
-    sf::Font font;
-    sf::Text titleText;
-    std::vector<sf::Text> menuItems;
-    std::vector<sf::RectangleShape> buttons;
-};
+    void render(sf::RenderWindow& window) override;
+    void onEnter() override;
+    void onExit() override;
 
-#endif // MAINMENUSTATE_H
+private:
+    StateMachine& machine;
+    sf::RenderWindow& window;
+    sf::Text title;
+    sf::Text level1Button;
+    sf::Text level2Button;
+    sf::Text level3Button;
+    sf::Text exitButton;
+    sf::RectangleShape background;
+};
