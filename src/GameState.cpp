@@ -1,104 +1,109 @@
-#include "../include/GameState.h"
-#include "../include/Level.h"
-#include <vector>
+#include "GameState.h"
+#include "CrosswordLevel.h"
+#include "ResourceManager.h"
+#include <algorithm>
 
-GameState::GameState(StateManager& manager, int level) 
-    : State(manager), currentLevel(level), isComplete(false) {
+GameState::GameState(StateMachine& machine, sf::RenderWindow& window, int level)
+    : machine(machine), window(window), currentLevel(level) {
+}
+
+void GameState::onEnter() {
+    createCrossword(currentLevel);
+    setupUI();
+}
+
+void GameState::onExit() {
+}
+
+void GameState::createCrossword(int level) {
+    std::vector<Word> words;
     
-    font = utils::loadFont("fonts/arial.ttf");
-    
+    switch (level) {
+    case 1: words = CrosswordLevel::getLevel1Words(); break;
+    case 2: words = CrosswordLevel::getLevel2Words(); break;
+    case 3: words = CrosswordLevel::getLevel3Words(); break;
+    default: words = CrosswordLevel::getLevel1Words(); break;
+    }
+
+    // Calculate required grid size
+    int maxX = 0, maxY = 0;
+    for (const auto& word : words) {
+        for (const auto& pos : word.positions) {
+            maxX = std::max(maxX, pos.x);
+            maxY = std::max(maxY, pos.y);
+        }
+    }
+
+    crossword = std::make_unique<Crossword>(maxY + 1, maxX + 1);
+    crossword->setFont(ResourceManager::getInstance().getFont("arial"));
+    crossword->loadFromWords(words);
+}
+
+void GameState::setupUI() {
+    auto& font = ResourceManager::getInstance().getFont("arial");
+
+    background.setSize(sf::Vector2f(window.getSize()));
+    background.setFillColor(sf::Color(240, 240, 240));
+
+    levelText.setString(L"Уровень " + std::to_wstring(currentLevel));
     levelText.setFont(font);
     levelText.setCharacterSize(36);
     levelText.setFillColor(sf::Color::Black);
-    levelText.setString("Уровень " + std::to_string(currentLevel));
+    levelText.setStyle(sf::Text::Bold);
     levelText.setPosition(20, 20);
-    
-    completeText.setFont(font);
-    completeText.setCharacterSize(24);
-    completeText.setFillColor(sf::Color::Green);
-    completeText.setString("Кроссворд решен!");
-    completeText.setPosition(20, 70);
-    
-    backText.setFont(font);
-    backText.setCharacterSize(24);
-    backText.setFillColor(sf::Color::Blue);
-    backText.setString("Назад в меню");
-    backText.setPosition(20, 120);
-    
-    createCrossword();
-}
 
-void GameState::createCrossword() {
-    Level level;
-    
-    switch (currentLevel) {
-        case 1: level = Levels::getLevel1(); break;
-        case 2: level = Levels::getLevel2(); break;
-        case 3: level = Levels::getLevel3(); break;
-        default: level = Levels::getLevel1(); break;
-    }
-    
-    std::vector<CrosswordDefinition> definitions;
-    
-    for (size_t i = 0; i < level.words.size(); ++i) {
-        CrosswordDefinition def;
-        def.word = level.words[i];
-        def.definition = level.definitions[i];
-        def.startX = level.positions[i].first;
-        def.startY = level.positions[i].second;
-        def.horizontal = level.orientations[i];
-        
-        definitions.push_back(def);
-    }
-    
-    crossword = std::make_unique<Crossword>(definitions, level.gridSize);
+    backButton.setString(L"← Назад");
+    backButton.setFont(font);
+    backButton.setCharacterSize(28);
+    backButton.setFillColor(sf::Color::Blue);
+    backButton.setPosition(20, window.getSize().y - 50);
+
+    checkButton.setString(L"Проверить");
+    checkButton.setFont(font);
+    checkButton.setCharacterSize(28);
+    checkButton.setFillColor(sf::Color::Green);
+    checkButton.setPosition(window.getSize().x - checkButton.getGlobalBounds().width - 20, window.getSize().y - 50);
+
+    resultText.setString(L"");
+    resultText.setFont(font);
+    resultText.setCharacterSize(28);
+    resultText.setFillColor(sf::Color::Black);
+    resultText.setPosition(window.getSize().x / 2 - 100, window.getSize().y - 50);
 }
 
 void GameState::handleEvent(const sf::Event& event) {
-    if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-        sf::Vector2i mousePos = sf::Mouse::getPosition(*manager.getWindow());
-        
-        if (backText.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
-            manager.changeState(std::make_unique<MainMenuState>(manager));
-            return;
-        }
-    }
-    
-    if (!isComplete) {
-        crossword->handleEvent(event, *manager.getWindow());
-        
-        if (crossword->isComplete()) {
-            isComplete = true;
+    crossword->handleEvent(event, window);
+
+    if (event.type == sf::Event::MouseButtonPressed) {
+        if (event.mouseButton.button == sf::Mouse::Left) {
+            sf::Vector2f mousePos = window.mapPixelToCoords(sf::Vector2i(event.mouseButton.x, event.mouseButton.y));
+
+            if (backButton.getGlobalBounds().contains(mousePos)) {
+                machine.changeState(std::make_unique<MainMenuState>(machine, window));
+            }
+            else if (checkButton.getGlobalBounds().contains(mousePos)) {
+                bool isCorrect = crossword->checkSolution();
+                if (isCorrect) {
+                    resultText.setString(L"Правильно!");
+                    resultText.setFillColor(sf::Color::Green);
+                }
+                else {
+                    resultText.setString(L"Есть ошибки!");
+                    resultText.setFillColor(sf::Color::Red);
+                }
+            }
         }
     }
 }
 
 void GameState::update(float dt) {
-    // Nothing to update for now
 }
 
-void GameState::draw(sf::RenderWindow& window) {
-    window.clear(sf::Color(240, 240, 240));
-    
-    drawHeader(window);
-    crossword->draw(window, font);
-    
-    if (isComplete) {
-        window.draw(completeText);
-    }
-    
-    window.draw(backText);
-}
-
-void GameState::drawHeader(sf::RenderWindow& window) {
+void GameState::render(sf::RenderWindow& window) {
+    window.draw(background);
     window.draw(levelText);
-    
-    sf::Text infoText;
-    infoText.setFont(font);
-    infoText.setCharacterSize(20);
-    infoText.setFillColor(sf::Color::Black);
-    infoText.setString("Кликните на клетку и введите букву. Backspace - удалить букву.");
-    infoText.setPosition(20, 60);
-    
-    window.draw(infoText);
+    window.draw(backButton);
+    window.draw(checkButton);
+    window.draw(resultText);
+    crossword->render(window);
 }
